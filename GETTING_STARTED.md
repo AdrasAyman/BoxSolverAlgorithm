@@ -3,7 +3,7 @@
 ## 1. Clone and open the folder
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/BoxSolverAlgorithm.git
+git clone https://github.com/AdrasAyman/BoxSolverAlgorithm.git
 cd BoxSolverAlgorithm
 ```
 
