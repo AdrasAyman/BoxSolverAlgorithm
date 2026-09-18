@@ -1,0 +1,450 @@
+openapi: 3.0.3
+info:
+  title: BoxSolverAlgorithm API
+  version: 1.0.0
+  description: |
+    BoxSolverAlgorithm 3D bin-packing engine.
+
+    This document is the **public HTTP contract** for the engine. It reuses the
+    `BoxType` and `Item` schemas from `packer_schemas.yaml` verbatim and adds
+    the request envelope and the response (placement) schema.
+
+    ## Coordinate system
+
+    Every coordinate is in **millimetres**, every weight in **kilograms**.
+
+      * Origin `(0,0,0)` is the **internal front-bottom-left corner** of the box.
+      * `+X` runs along the box **Width**  (left to right)
+      * `+Y` runs along the box **Length** (front to back)
+      * `+Z` runs along the box **Depth**  (floor to lid) - Depth is vertical.
+      * A `Position` is the **minimum corner** of the item's axis-aligned
+        bounding box, not its centre. The item occupies
+        `[X, X+Width] x [Y, Y+Length] x [Z, Z+Depth]`.
+
+    A renderer that draws a cuboid of `Dimensions` at `Position` with no further
+    transformation will produce the correct layout. `Orientation` is only needed
+    if the item is drawn with artwork, a label, or a "this way up" arrow.
+
+    ## Weight
+
+    `MaxWeight` is the rated capacity of the carton and **excludes**
+    `BoxWeight`. The engine therefore enforces
+    `ItemsWeight <= MaxWeight` and reports `TotalWeight = ItemsWeight +
+    BoxWeight` as the despatch weight.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  engine: { type: string, example: boxsolver }
+                  version: { type: string, example: 0.1.0 }
+
+  /v1/orientations:
+    get:
+      summary: The six axis-aligned orientation codes and their Euler angles
+      description: |
+        Reference endpoint so a renderer can build a lookup table at start-up
+        rather than hard-coding rotation maths.
+      responses:
+        "200":
+          description: Orientation reference data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Orientations:
+                    type: array
+                    items: { $ref: "#/components/schemas/Orientation" }
+
+  /v1/pack:
+    post:
+      summary: Pack a set of items into the supplied box types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PackRequest" }
+      responses:
+        "200":
+          description: |
+            A solution. Note that `200` does **not** imply everything was
+            packed - check `Success` and `UnpackedItems`. A partial solution is
+            a legitimate result, not an error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackResponse" }
+        "422":
+          description: The payload did not satisfy the schema
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+components:
+  schemas:
+    # ---------------------------------------------------------------- input
+    BoxType:
+      type: object
+      description: Unchanged from packer_schemas.yaml.
+      required: [Reference, Width, Length, Depth]
+      properties:
+        Reference:
+          type: string
+          description: Unique code identifying the box type
+          example: SML
+        Width:
+          type: number
+          description: Internal width in millimetres
+          example: 150
+        Length:
+          type: number
+          description: Internal length in millimetres
+          example: 150
+        Depth:
+          type: number
+          description: Internal depth in millimetres (vertical)
+          example: 150
+        MaxWeight:
+          type: number
+          format: float
+          description: >
+            Rated weight capacity for the contents, in kilograms, excluding
+            BoxWeight. If omitted, the box has no weight limit.
+          example: 8.5
+        BoxWeight:
+          type: number
+          format: float
+          description: Weight of the empty box itself, in kilograms. Defaults to 0.
+          example: 0.5
+        Active:
+          type: boolean
+          default: true
+          description: Inactive box types are never selected.
+        MaximumBoxes:
+          type: integer
+          description: Maximum number of this box type available. If omitted, unlimited.
+          example: 100
+
+    Item:
+      type: object
+      description: |
+        The base Item schema plus four optional, backwards-compatible
+        extensions (Quantity, KeepUpright, AllowedRotations). A payload that
+        uses none of them behaves exactly as the original schema specifies.
+      required: [ItemCode, ItemReference, Width, Length, Depth, Weight]
+      properties:
+        ItemCode:
+          type: string
+          example: ITM-001
+        ItemReference:
+          type: string
+          example: Widget A
+        Width:
+          type: number
+          example: 100
+        Length:
+          type: number
+          example: 200
+        Depth:
+          type: number
+          example: 50
+        Weight:
+          type: number
+          format: float
+          description: Weight of a single unit, in kilograms.
+          example: 0.5
+        BoxGroup:
+          type: string
+          nullable: true
+          description: >
+            Items sharing a BoxGroup are packed together and never mixed with
+            another group. If omitted, the item may go in any box.
+          example: GROUP-A
+        Quantity:
+          type: integer
+          minimum: 1
+          default: 1
+          description: >
+            EXTENSION. Number of identical units ordered. Each unit is placed
+            individually and gets its own InstanceId. Without this an order for
+            five of the same SKU has to be sent as five duplicate objects.
+          example: 3
+        KeepUpright:
+          type: boolean
+          default: false
+          description: >
+            EXTENSION. "This way up" - restricts the item to the two
+            orientations that keep its own Depth vertical.
+        AllowedRotations:
+          type: array
+          description: >
+            EXTENSION. Explicit whitelist of orientation codes for fine-grained
+            control. Overrides KeepUpright.
+          items:
+            type: string
+            enum: [WLD, LWD, WDL, DLW, LDW, DWL]
+
+    PackingOptions:
+      type: object
+      description: Solver tuning. Every field is optional.
+      properties:
+        Objective:
+          type: string
+          enum: [min_boxes, min_volume]
+          default: min_boxes
+          description: >
+            min_boxes fills each carton as full as possible (fewest cartons).
+            min_volume prefers the tightest carton for what actually fits.
+        AllowRotation:
+          type: boolean
+          default: true
+        RequireSupport:
+          type: boolean
+          default: true
+          description: Items must rest on the floor or on other items.
+        MinSupportRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.5
+          description: Fraction of an item's base that must be supported.
+        AllowUngroupedToShare:
+          type: boolean
+          default: true
+          description: >
+            Whether items with no BoxGroup may be added to a carton opened for
+            a group.
+        TimeLimitSeconds:
+          type: number
+          default: 20
+          description: Soft budget; the best complete solution so far is returned.
+
+    PackRequest:
+      type: object
+      required: [Boxes, Items]
+      properties:
+        Boxes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/BoxType" }
+        Items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/Item" }
+        Options:
+          $ref: "#/components/schemas/PackingOptions"
+
+    # --------------------------------------------------------------- output
+    Position:
+      type: object
+      description: >
+        Minimum corner of the item's bounding box, in millimetres, relative to
+        the internal front-bottom-left corner of its box.
+      required: [X, Y, Z]
+      properties:
+        X: { type: number, description: along box Width,  example: 0 }
+        Y: { type: number, description: along box Length, example: 150 }
+        Z: { type: number, description: along box Depth (vertical), example: 0 }
+
+    Dimensions:
+      type: object
+      description: >
+        Extents **as placed**, i.e. already rotated. Width is the X extent,
+        Length the Y extent, Depth the Z extent. These will be a permutation of
+        the item's own dimensions.
+      required: [Width, Length, Depth]
+      properties:
+        Width:  { type: number, example: 200 }
+        Length: { type: number, example: 100 }
+        Depth:  { type: number, example: 50 }
+
+    Orientation:
+      type: object
+      description: >
+        The same rotation expressed three ways so a consumer can use whichever
+        suits. Code and AxisMap are canonical; RotationDegrees is derived and
+        provided for convenience.
+      required: [Code, AxisMap, RotationDegrees]
+      properties:
+        Code:
+          type: string
+          enum: [WLD, LWD, WDL, DLW, LDW, DWL]
+          description: >
+            Which of the item's own dimensions lies along X, then Y, then Z.
+            WLD is the identity (unrotated).
+          example: LWD
+        AxisMap:
+          type: object
+          description: The same mapping spelled out.
+          properties:
+            X: { type: string, enum: [Width, Length, Depth] }
+            Y: { type: string, enum: [Width, Length, Depth] }
+            Z: { type: string, enum: [Width, Length, Depth] }
+        RotationDegrees:
+          type: object
+          description: >
+            Extrinsic rotation about the fixed world axes, applied X then Y
+            then Z (R = Rz.Ry.Rx). Always a multiple of 90.
+          properties:
+            X: { type: integer, enum: [0, 90, 180, 270] }
+            Y: { type: integer, enum: [0, 90, 180, 270] }
+            Z: { type: integer, enum: [0, 90, 180, 270] }
+
+    Placement:
+      type: object
+      required: [Sequence, InstanceId, ItemCode, Position, Dimensions, Orientation]
+      properties:
+        Sequence:
+          type: integer
+          description: >
+            Load order within this box, starting at 0. Guaranteed
+            non-decreasing in Z, so replaying the sequence is a physically
+            valid packing animation and a valid instruction for a picker.
+          example: 0
+        InstanceId:
+          type: string
+          description: >
+            Stable per-unit identifier, `ItemCode#ordinal`. Unique within a
+            response even when Quantity > 1. Use this as your log key.
+          example: ITM-001#1
+        ItemCode:
+          type: string
+          example: ITM-001
+        ItemReference:
+          type: string
+          example: Widget A
+        BoxGroup:
+          type: string
+          nullable: true
+        Position:    { $ref: "#/components/schemas/Position" }
+        Dimensions:  { $ref: "#/components/schemas/Dimensions" }
+        Orientation: { $ref: "#/components/schemas/Orientation" }
+        Weight:
+          type: number
+          format: float
+          description: Weight of this single unit, in kilograms.
+
+    PackedBox:
+      type: object
+      required: [BoxIndex, Reference, Dimensions, Items]
+      properties:
+        BoxIndex:
+          type: integer
+          description: Zero-based index of this carton within the response.
+        Reference:
+          type: string
+          description: The BoxType Reference that was selected.
+          example: MED
+        BoxGroup:
+          type: string
+          nullable: true
+          description: The BoxGroup this carton was opened for, if any.
+        Dimensions: { $ref: "#/components/schemas/Dimensions" }
+        ItemCount:  { type: integer }
+        ItemsWeight:
+          type: number
+          description: Sum of the contents, in kilograms. Compare against MaxWeight.
+        BoxWeight:
+          type: number
+          description: Tare weight of the empty carton.
+        TotalWeight:
+          type: number
+          description: ItemsWeight + BoxWeight. This is the despatch weight.
+        MaxWeight:
+          type: number
+          nullable: true
+          description: Echoed from the box type for convenience.
+        VolumeUtilisation:
+          type: number
+          description: Packed volume / carton volume, 0 to 1.
+          example: 0.6824
+        LoadHeight:
+          type: number
+          description: Highest Z reached, in millimetres.
+        Items:
+          type: array
+          items: { $ref: "#/components/schemas/Placement" }
+
+    UnpackedItem:
+      type: object
+      required: [InstanceId, ItemCode, ReasonCode, Reason]
+      properties:
+        InstanceId: { type: string, example: ITM-004#2 }
+        ItemCode:   { type: string }
+        ItemReference: { type: string }
+        ReasonCode:
+          type: string
+          enum: [DOES_NOT_FIT, EXCEEDS_MAX_WEIGHT, NO_FEASIBLE_BOX, BOX_QUOTA_EXHAUSTED]
+          description: Machine-readable. Switch on this, not on Reason.
+        Reason:
+          type: string
+          description: Human-readable explanation, safe to show to an operator.
+
+    Meta:
+      type: object
+      properties:
+        Engine:        { type: string, example: boxsolver }
+        Version:       { type: string, example: 0.1.0 }
+        SchemaVersion: { type: string, example: 1.0.0 }
+        SolveTimeMs:   { type: number, example: 12.4 }
+        TimeLimitReached:
+          type: boolean
+          description: True if the solver hit TimeLimitSeconds and returned early.
+        Units:
+          type: object
+          properties:
+            Length: { type: string, example: mm }
+            Weight: { type: string, example: kg }
+        CoordinateSystem:
+          type: object
+          description: Self-describing, so a consumer never has to guess.
+
+    Summary:
+      type: object
+      properties:
+        BoxCount: { type: integer }
+        BoxCounts:
+          type: object
+          additionalProperties: { type: integer }
+          description: 'Cartons used per box Reference, e.g. {"SML": 2, "MED": 1}.'
+        PackedItemCount:   { type: integer }
+        UnpackedItemCount: { type: integer }
+        TotalWeight:       { type: number }
+        OverallVolumeUtilisation: { type: number }
+
+    PackResponse:
+      type: object
+      required: [Success, Meta, Summary, Boxes, UnpackedItems]
+      properties:
+        Success:
+          type: boolean
+          description: True only when UnpackedItems is empty.
+        Meta:    { $ref: "#/components/schemas/Meta" }
+        Summary: { $ref: "#/components/schemas/Summary" }
+        Boxes:
+          type: array
+          items: { $ref: "#/components/schemas/PackedBox" }
+        UnpackedItems:
+          type: array
+          items: { $ref: "#/components/schemas/UnpackedItem" }
+
+    Error:
+      type: object
+      properties:
+        Error:   { type: string, example: SCHEMA_ERROR }
+        Message:
+          type: string
+          example: "Items[2] (ITM-003): required field 'Weight' is missing"

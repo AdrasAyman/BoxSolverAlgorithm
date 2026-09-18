@@ -1,0 +1,166 @@
+{
+  "Success": true,
+  "Meta": {
+    "Engine": "boxsolver",
+    "Version": "0.1.0",
+    "SchemaVersion": "1.0.0",
+    "SolveTimeMs": 0.3,
+    "TimeLimitReached": false,
+    "Units": {
+      "Length": "mm",
+      "Weight": "kg"
+    },
+    "CoordinateSystem": {
+      "Origin": "internal front-bottom-left corner of the box",
+      "X": "Width",
+      "Y": "Length",
+      "Z": "Depth (vertical)",
+      "PositionMeaning": "minimum corner of the item's bounding box"
+    }
+  },
+  "Summary": {
+    "BoxCount": 2,
+    "BoxCounts": {
+      "MED": 1,
+      "SML": 1
+    },
+    "PackedItemCount": 3,
+    "UnpackedItemCount": 0,
+    "TotalWeight": 5.87,
+    "OverallVolumeUtilisation": 0.0763
+  },
+  "Boxes": [
+    {
+      "BoxIndex": 0,
+      "Reference": "MED",
+      "BoxGroup": "GROUP-A",
+      "Dimensions": {
+        "Width": 400.0,
+        "Length": 400.0,
+        "Depth": 400.0
+      },
+      "ItemCount": 2,
+      "ItemsWeight": 3.8,
+      "BoxWeight": 0.75,
+      "TotalWeight": 4.55,
+      "MaxWeight": 15.2,
+      "VolumeUtilisation": 0.0684,
+      "LoadHeight": 75.0,
+      "Items": [
+        {
+          "Sequence": 0,
+          "InstanceId": "ITM-001#1",
+          "ItemCode": "ITM-001",
+          "ItemReference": "Widget A",
+          "BoxGroup": "GROUP-A",
+          "Position": {
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          },
+          "Dimensions": {
+            "Width": 100.0,
+            "Length": 200.0,
+            "Depth": 50.0
+          },
+          "Orientation": {
+            "Code": "WLD",
+            "AxisMap": {
+              "X": "Width",
+              "Y": "Length",
+              "Z": "Depth"
+            },
+            "RotationDegrees": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0
+            }
+          },
+          "Weight": 1.0
+        },
+        {
+          "Sequence": 1,
+          "InstanceId": "ITM-002#1",
+          "ItemCode": "ITM-002",
+          "ItemReference": "Widget B",
+          "BoxGroup": null,
+          "Position": {
+            "X": 100.0,
+            "Y": 0.0,
+            "Z": 0.0
+          },
+          "Dimensions": {
+            "Width": 300.0,
+            "Length": 150.0,
+            "Depth": 75.0
+          },
+          "Orientation": {
+            "Code": "WLD",
+            "AxisMap": {
+              "X": "Width",
+              "Y": "Length",
+              "Z": "Depth"
+            },
+            "RotationDegrees": {
+              "X": 0,
+              "Y": 0,
+              "Z": 0
+            }
+          },
+          "Weight": 2.8
+        }
+      ]
+    },
+    {
+      "BoxIndex": 1,
+      "Reference": "SML",
+      "BoxGroup": "GROUP-B",
+      "Dimensions": {
+        "Width": 150.0,
+        "Length": 150.0,
+        "Depth": 150.0
+      },
+      "ItemCount": 1,
+      "ItemsWeight": 0.82,
+      "BoxWeight": 0.5,
+      "TotalWeight": 1.32,
+      "MaxWeight": 8.5,
+      "VolumeUtilisation": 0.2276,
+      "LoadHeight": 80.0,
+      "Items": [
+        {
+          "Sequence": 0,
+          "InstanceId": "ITM-003#1",
+          "ItemCode": "ITM-003",
+          "ItemReference": "Fragile Glassware",
+          "BoxGroup": "GROUP-B",
+          "Position": {
+            "X": 0.0,
+            "Y": 0.0,
+            "Z": 0.0
+          },
+          "Dimensions": {
+            "Width": 120.0,
+            "Length": 80.0,
+            "Depth": 80.0
+          },
+          "Orientation": {
+            "Code": "DLW",
+            "AxisMap": {
+              "X": "Depth",
+              "Y": "Length",
+              "Z": "Width"
+            },
+            "RotationDegrees": {
+              "X": 0,
+              "Y": 90,
+              "Z": 0
+            }
+          },
+          "Weight": 0.82
+        }
+      ]
+    }
+  ],
+  "UnpackedItems": []
+}

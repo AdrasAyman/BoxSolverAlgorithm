@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "boxsolver"
+version = "0.1.0"
+description = "A deterministic 3D bin-packing engine with constraint handling"
+requires-python = ">=3.10"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Adras Ayman", email = "adrasayman123@gmail.com" }]
+keywords = ["bin-packing", "3d", "logistics", "optimisation", "packing"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/AdrasAyman/BoxSolverAlgorithm"
+Issues = "https://github.com/AdrasAyman/BoxSolverAlgorithm/issues"
+# The HTTP transport is a runtime requirement. The core engine itself imports
+# nothing external - boxsolver.core and boxsolver.models work on a bare
+# interpreter.
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "PyYAML>=6.0"]
+
+[project.scripts]
+boxsolver = "boxsolver.entrypoints.cli:main"
+boxsolver-api = "boxsolver.entrypoints.api:run"
+
+[tool.setuptools.packages.find]
+include = ["boxsolver*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

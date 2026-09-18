@@ -1,0 +1,1 @@
+"""Algorithmic core for BoxSolverAlgorithm."""
